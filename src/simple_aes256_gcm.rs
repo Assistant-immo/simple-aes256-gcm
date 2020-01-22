@@ -128,31 +128,50 @@ pub struct EncryptedValueAndId {
     pub iv: Iv
 }
 
-pub fn encrypt<'a>(key: &Key, decrypted: &Decrypted) -> Result<EncryptedValueAndId, &'static str> {
+pub fn encrypt<'a>(key: &Key, decrypted: &Decrypted) -> Result<EncryptedValueAndId, aead::Error> {
     let iv = Iv::generate();
     let nonce = GenericArray::from_slice(&iv.u8_array);
     let client = Aes256Gcm::new(GenericArray::clone_from_slice(&key.u8_array));
-    match client.encrypt(nonce, decrypted.value.as_bytes()) {
-        Ok(ciphertext) => Ok(EncryptedValueAndId {
-            iv: iv,
-            encrypted: Encrypted {
-                u8_vec: ciphertext
-            }
-        }),
-        Err(_) => Err("encryption failure!")
+    let ciphertext =  client.encrypt(nonce, decrypted.value.as_bytes())?;
+    Ok(EncryptedValueAndId {
+        iv: iv,
+        encrypted: Encrypted {
+            u8_vec: ciphertext
+        }
+    })
+}
+
+#[derive(Debug, Clone)]
+pub enum DecryptionError {
+    InvalidUTF8DecryptionError,
+    GenericDecryptionError
+}
+impl fmt::Display for DecryptionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DecryptionError::InvalidUTF8DecryptionError => write!(f, "{}", "Decryption error: invalid UTF-8"),
+            DecryptionError::GenericDecryptionError => write!(f, "{}", "Decryption error"),
+        }
     }
 }
 
-pub fn decrypt(key: &Key, encrypted_value_and_iv: EncryptedValueAndId) -> Result<String, &'static str> {
+impl error::Error for DecryptionError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        // Generic error, underlying cause isn't tracked.
+        None
+    }
+}
+
+pub fn decrypt(key: &Key, encrypted_value_and_iv: EncryptedValueAndId) -> Result<String, DecryptionError> {
     let nonce = GenericArray::from_slice(&encrypted_value_and_iv.iv.u8_array);
     let client = Aes256Gcm::new(GenericArray::clone_from_slice(&key.u8_array));
 
     match client.decrypt(nonce, encrypted_value_and_iv.encrypted.u8_vec.as_ref()) {
         Ok(decrypted_u8_vec) => match String::from_utf8(decrypted_u8_vec) {
             Ok(decrypted_string) => Ok(decrypted_string),
-            Err(_) => Err("Invalid UTF-8")
+            Err(_) => Err(DecryptionError::InvalidUTF8DecryptionError)
         },
-        Err(_) => Err("Decryption error")
+        Err(_) => Err(DecryptionError::GenericDecryptionError)
     }
 }
 
@@ -263,4 +282,96 @@ mod tests {
             "YWFhYWFhYQ=="
         )
     }
+
+    // #[test]
+    // Not able to find any example that would make this err...
+    // fn encrypt_err_when_encryption_error() {
+    //     let key = Key::try_from("12345678901234567890123456789012").unwrap();
+    //     let decrypted = Decrypted::from("???")
+    //     match encrypt(&key, &decrypted) {
+    //         Ok(_) => assert!(false, "Should err"),
+    //         Err(e) => assert!(true)
+    //     }
+    // }
+
+    #[test]
+    fn encrypted_values_are_different_for_same_inputs() {
+        let encrypted_1 = encrypt(
+            &Key::try_from("12345678901234567890123456789012").unwrap(),
+            &Decrypted::from("This is a text.")
+        ).unwrap();
+        let encrypted_2 = encrypt(
+            &Key::try_from("12345678901234567890123456789012").unwrap(),
+            &Decrypted::from("This is a text.")
+        ).unwrap();
+        assert!(encrypted_1.encrypted.u8_vec != encrypted_2.encrypted.u8_vec)
+    }
+
+    #[test]
+    fn encrypted_values_are_different_for_different_inputs() {
+        let encrypted_1 = encrypt(
+            &Key::try_from("12345678901234567890123456789012").unwrap(),
+            &Decrypted::from("This is a text.")
+        ).unwrap();
+        let encrypted_2 = encrypt(
+            &Key::try_from("12345678901234567890123456789012").unwrap(),
+            &Decrypted::from("This is another text.")
+        ).unwrap();
+        assert!(encrypted_1.encrypted.u8_vec != encrypted_2.encrypted.u8_vec)
+    }
+
+    #[test]
+    fn encrypt_decrypt_is_iso() {
+        let key = Key::try_from("12345678901234567890123456789012").unwrap();
+        let encrypted = encrypt(
+            &key,
+            &Decrypted::from("This is a text.")
+        ).unwrap();
+
+        assert_eq!(decrypt(&key, encrypted).unwrap(), String::from("This is a text."))
+    }
+
+    // #[test]
+    // // TO WRITE
+    // fn decrypt_fails_when_non_utf8() {
+    //     let key = Key::try_from("12345678901234567890123456789012").unwrap();
+    //
+    //     let iv = Iv::generate();
+    //     let nonce = GenericArray::from_slice(&iv.u8_array);
+    //     let client = Aes256Gcm::new(GenericArray::clone_from_slice(&key.u8_array));
+    //     let invalid_utf8_bytes: [u8] = [133u8, 133u8];
+    //     let ciphertext = client.encrypt(nonce, &invalid_utf8_bytes).unwrap();
+    //
+    //     let encrypted_value_and_iv = EncryptedValueAndId {
+    //         iv: iv,
+    //         encrypted: Encrypted {
+    //             u8_vec: ciphertext
+    //         }
+    //     };
+    //
+    //     match decrypt(&key, encrypted_value_and_iv) {
+    //         Ok(_) => assert!(false, "Should err InvalidUTF8DecryptionError"),
+    //         Err(e) => match e {
+    //             DecryptionError::GenericDecryptionError => assert!(false, "Should err InvalidUTF8DecryptionError"),
+    //             DecryptionError::InvalidUTF8DecryptionError => assert!(true)
+    //         }
+    //     }
+    // }
+
+    // #[test]
+    // Not able to find any example that would make this err...
+    // fn decrypt_err_when_decryption_error() {
+    //     let key = Key::try_from("12345678901234567890123456789012").unwrap();
+    //     let encrypted_value_and_iv = EncryptedValueAndIv {
+    //         encrypted: encrypted,
+    //         iv: iv
+    //     }
+    //     match decrypt(&key, encrypted_value_and_iv) {
+    //         Ok(_) => assert!(false, "Should err GenericDecryptionError"),
+    //         Err(e) => match e {
+    //             DecryptionError::InvalidUTF8DecryptionError => assert!(false, GenericDecryptionError),
+    //             DecryptionError::GenericDecryptionError => assert!(true)
+    //         }
+    //     }
+    // }
 }
