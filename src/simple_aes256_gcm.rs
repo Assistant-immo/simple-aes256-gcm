@@ -2,6 +2,7 @@ pub mod simple_aes256_gcm {
     use aes_gcm::Aes256Gcm;
     use aead::{Aead, NewAead, generic_array::GenericArray};
     use std::fmt;
+    use std::convert::TryInto;
 
     pub struct Key {
         pub u8_array: [u8; 32]
@@ -9,15 +10,13 @@ pub mod simple_aes256_gcm {
 
     impl Key {
         pub fn new(key: &str) -> Result<Key, &'static str> {
-            let mut u8_array: [u8; 32] = Default::default();
-            let key_bytes = key.as_bytes();
-            if key_bytes.len() != 32 {
-                return Err("Please provide a 32-bytes key")
+            let u8_array: Result<[u8; 32], _> = key.as_bytes().try_into();
+            match u8_array {
+                Ok(value) => Ok(Key {
+                    u8_array: value
+                }),
+                Err(_) => Err("Please provide a 32-bytes key")
             }
-            u8_array.copy_from_slice(key_bytes);
-            Ok(Key {
-                u8_array: u8_array
-            })
         }
     }
 
@@ -27,19 +26,18 @@ pub mod simple_aes256_gcm {
 
     impl Iv {
         pub fn from_base64(base64_iv: &str) -> Result<Iv, &'static str> {
-            let encrypted_value = match base64::decode(&base64_iv) {
+            let encrypted_value = match base64::decode(base64_iv) {
                 Ok(data) => data,
                 Err(_) => return Err("Invalid Base64 string")
             };
 
-            let mut u8_array: [u8; 12] = Default::default();
-            if encrypted_value.len() != 12 {
-                return Err("Please provide a 12-bytes key")
+            let u8_array: Result<[u8; 12], _> = encrypted_value.as_slice().try_into();
+            match u8_array {
+                Ok(value) => Ok(Iv {
+                    u8_array: value
+                }),
+                Err(_) => Err("Please provide a base64 encoeded 12-byte iv")
             }
-            u8_array.copy_from_slice(encrypted_value.as_slice());
-            Ok(Iv {
-                u8_array: u8_array
-            })
         }
 
         pub fn generate() -> Iv {
@@ -62,7 +60,7 @@ pub mod simple_aes256_gcm {
     impl Encrypted {
 
         pub fn from_base64(base64_encrypted: &str) -> Result<Encrypted, &'static str> {
-            match base64::decode(&base64_encrypted) {
+            match base64::decode(base64_encrypted) {
                 Ok(data) => Ok(
                     Encrypted {
                         u8_vec: data
@@ -84,17 +82,18 @@ pub mod simple_aes256_gcm {
         pub iv: Iv
     }
 
-    pub fn encrypt<'a>(key: &Key, value: &'a [u8]) -> EncryptedValueAndId {
+    pub fn encrypt<'a>(key: &Key, value: &'a [u8]) -> Result<EncryptedValueAndId, &'static str> {
         let iv = Iv::generate();
         let nonce = GenericArray::from_slice(&iv.u8_array);
         let client = Aes256Gcm::new(GenericArray::clone_from_slice(&key.u8_array));
-        let ciphertext = client.encrypt(nonce, value).expect("encryption failure!");
-
-        EncryptedValueAndId {
-            iv: iv,
-            encrypted: Encrypted {
-                u8_vec: ciphertext
-            }
+        match client.encrypt(nonce, value) {
+            Ok(ciphertext) => Ok(EncryptedValueAndId {
+                iv: iv,
+                encrypted: Encrypted {
+                    u8_vec: ciphertext
+                }
+            }),
+            Err(_) => Err("encryption failure!")
         }
     }
 
