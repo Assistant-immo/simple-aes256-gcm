@@ -113,16 +113,26 @@ impl fmt::Display for Encrypted {
     }
 }
 
+pub struct Decrypted<'a> {
+    value: &'a str
+}
+impl<'a> From<&'a str> for Decrypted<'a> {
+    fn from(value: &'a str) -> Self {
+        Self { value: value }
+    }
+}
+
+
 pub struct EncryptedValueAndId {
     pub encrypted: Encrypted,
     pub iv: Iv
 }
 
-pub fn encrypt<'a>(key: &Key, value: &'a [u8]) -> Result<EncryptedValueAndId, &'static str> {
+pub fn encrypt<'a>(key: &Key, decrypted: &Decrypted) -> Result<EncryptedValueAndId, &'static str> {
     let iv = Iv::generate();
     let nonce = GenericArray::from_slice(&iv.u8_array);
     let client = Aes256Gcm::new(GenericArray::clone_from_slice(&key.u8_array));
-    match client.encrypt(nonce, value) {
+    match client.encrypt(nonce, decrypted.value.as_bytes()) {
         Ok(ciphertext) => Ok(EncryptedValueAndId {
             iv: iv,
             encrypted: Encrypted {
@@ -168,8 +178,8 @@ mod tests {
     #[test]
     fn key_new_32_bytes_succeeds() {
         match Key::try_from("01234567890123456789012345678901") {
-            Ok(key) => assert_eq!(key.u8_array, [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49]),
-            Err(_) => assert!(false, "Should succeed")
+            Err(_) => assert!(false, "Should succeed"),
+            Ok(key) => assert_eq!(key.u8_array, [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49])
         }
     }
 
@@ -178,8 +188,8 @@ mod tests {
         match Iv::try_from("012") {
             Ok(_) => assert!(false),
             Err(e) => match e {
-                InvalidIvError::InvalidIvBase64Error => assert!(true),
-                _ => assert!(false, "Should err an InvalidIvError::InvalidIvBase64Error")
+                InvalidIvError::InvalidIvSizeError => assert!(false, "Should err an InvalidIvError::InvalidIvBase64Error"),
+                InvalidIvError::InvalidIvBase64Error => assert!(true)
             }
         }
     }
@@ -189,8 +199,8 @@ mod tests {
         match Iv::try_from("YWJj") {
             Ok(_) => assert!(false),
             Err(e) => match e {
-                InvalidIvError::InvalidIvSizeError => assert!(true),
-                _ => assert!(false, "Should err an InvalidIvError::InvalidIvSizeError")
+                InvalidIvError::InvalidIvBase64Error => assert!(false, "Should err an InvalidIvError::InvalidIvSizeError"),
+                InvalidIvError::InvalidIvSizeError => assert!(true)
             }
         }
     }
@@ -200,8 +210,8 @@ mod tests {
         match Iv::try_from("MDEyMzQ1Njc4OTAxMg==") {
             Ok(_) => assert!(false),
             Err(e) => match e {
-                InvalidIvError::InvalidIvSizeError => assert!(true),
-                _ => assert!(false, "Should err an InvalidIvError::InvalidIvSizeError")
+                InvalidIvError::InvalidIvBase64Error => assert!(false, "Should err an InvalidIvError::InvalidIvSizeError"),
+                InvalidIvError::InvalidIvSizeError => assert!(true)
             }
         }
     }
@@ -209,8 +219,8 @@ mod tests {
     #[test]
     fn iv_try_from_valid_12byte_succeeds() {
         match Iv::try_from("MDEyMzQ1Njc4OTAx") {
-            Ok(iv) => assert_eq!(iv.u8_array, [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49]),
-            Err(_) => assert!(false, "Should succeeds")
+            Err(_) => assert!(false, "Should succeeds"),
+            Ok(iv) => assert_eq!(iv.u8_array, [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49])
         }
     }
 
@@ -241,8 +251,8 @@ mod tests {
     #[test]
     fn encrypted_from64_valid_base64() {
         match Encrypted::try_from("YWFhYWFhYQ==") {
-            Ok(encryped) => assert_eq!(encryped.u8_vec, vec![97, 97, 97, 97, 97, 97, 97]),
-            Err(_) => assert!(false, "Should ok")
+            Err(_) => assert!(false, "Should ok"),
+            Ok(encryped) => assert_eq!(encryped.u8_vec, vec![97, 97, 97, 97, 97, 97, 97])
         }
     }
 
