@@ -331,32 +331,32 @@ mod tests {
         assert_eq!(decrypt(&key, encrypted).unwrap(), String::from("This is a text."))
     }
 
-    // #[test]
-    // // TO WRITE
-    // fn decrypt_fails_when_non_utf8() {
-    //     let key = Key::try_from("12345678901234567890123456789012").unwrap();
-    //
-    //     let iv = Iv::generate();
-    //     let nonce = GenericArray::from_slice(&iv.u8_array);
-    //     let client = Aes256Gcm::new(GenericArray::clone_from_slice(&key.u8_array));
-    //     let invalid_utf8_bytes: [u8] = [133u8, 133u8];
-    //     let ciphertext = client.encrypt(nonce, &invalid_utf8_bytes).unwrap();
-    //
-    //     let encrypted_value_and_iv = EncryptedValueAndId {
-    //         iv: iv,
-    //         encrypted: Encrypted {
-    //             u8_vec: ciphertext
-    //         }
-    //     };
-    //
-    //     match decrypt(&key, encrypted_value_and_iv) {
-    //         Ok(_) => assert!(false, "Should err InvalidUTF8DecryptionError"),
-    //         Err(e) => match e {
-    //             DecryptionError::GenericDecryptionError => assert!(false, "Should err InvalidUTF8DecryptionError"),
-    //             DecryptionError::InvalidUTF8DecryptionError => assert!(true)
-    //         }
-    //     }
-    // }
+    #[test]
+    // TO WRITE
+    fn decrypt_fails_when_non_utf8() {
+        let key = Key::try_from("12345678901234567890123456789012").unwrap();
+
+        let iv = Iv::generate();
+        let nonce = GenericArray::from_slice(&iv.u8_array);
+        let client = Aes256Gcm::new(GenericArray::clone_from_slice(&key.u8_array));
+        let invalid_utf8_bytes: &[u8] = &[133u8, 133u8];
+        let ciphertext = client.encrypt(nonce, invalid_utf8_bytes).unwrap();
+
+        let encrypted_value_and_iv = EncryptedValueAndId {
+            iv: iv,
+            encrypted: Encrypted {
+                u8_vec: ciphertext
+            }
+        };
+
+        match decrypt(&key, encrypted_value_and_iv) {
+            Ok(_) => assert!(false, "Should err InvalidUTF8DecryptionError"),
+            Err(e) => match e {
+                DecryptionError::GenericDecryptionError => assert!(false, "Should err InvalidUTF8DecryptionError"),
+                DecryptionError::InvalidUTF8DecryptionError => assert!(true)
+            }
+        }
+    }
 
     // #[test]
     // Not able to find any example that would make this err...
