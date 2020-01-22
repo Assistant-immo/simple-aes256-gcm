@@ -1,4 +1,4 @@
-use ::simple_aes256_gcm::simple_aes256_gcm;
+use ::simple_aes256_gcm;
 
 
 fn main() {
