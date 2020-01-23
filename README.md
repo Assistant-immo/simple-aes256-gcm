@@ -8,7 +8,7 @@ This library is built on top of `aes-gcm` crate exposing a easy-to-use aes256-gc
 Please find examples in the /examples folder.
 
 ```rust
-extern crate simple_aes256_gcm;
+use simple_aes256_gcm;
 use std::convert::TryFrom;
 
 fn main() {

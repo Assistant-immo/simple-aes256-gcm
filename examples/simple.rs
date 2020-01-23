@@ -1,4 +1,4 @@
-extern crate simple_aes256_gcm;
+use simple_aes256_gcm;
 use std::convert::TryFrom;
 
 fn main() {
