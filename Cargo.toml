@@ -1,6 +1,6 @@
 [package]
 name = "simple-aes256-gcm"
-version = "0.1.1"
+version = "0.2.0"
 description = "This library is built on top of `aes-gcm` crate exposing a easy-to-use aes256-gcm encryption API."
 authors = ["Nicolas Marlier <nicolas@prospect.guru>"]
 edition = "2018"
