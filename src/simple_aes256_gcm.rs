@@ -106,11 +106,18 @@ impl Iv {
     }
 }
 
-impl fmt::Display for Iv {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", base64::encode(&self.u8_array))
+impl From<&Iv> for String {
+    fn from(iv: &Iv) -> String {
+        base64::encode(&iv.u8_array)
     }
 }
+
+impl fmt::Display for Iv {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", String::from(self))
+    }
+}
+
 
 pub struct Encrypted {
     pub u8_vec: Vec<u8>
@@ -125,9 +132,15 @@ impl TryFrom<&str> for Encrypted {
     }
 }
 
+impl From<&Encrypted> for String {
+    fn from(encrypted: &Encrypted) -> String {
+        base64::encode(&encrypted.u8_vec)
+    }
+}
+
 impl fmt::Display for Encrypted {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", base64::encode(&self.u8_vec))
+        write!(f, "{}", String::from(self))
     }
 }
 
@@ -139,9 +152,16 @@ impl<'a> From<&'a str> for Decrypted<'a> {
         Self { value: value }
     }
 }
+
+impl From<&Decrypted<'_>> for String {
+    fn from(decrypted: &Decrypted<'_>) -> String {
+        String::from(decrypted.value)
+    }
+}
+
 impl<'a> fmt::Display for Decrypted<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", &self.value)
+        write!(f, "{}", String::from(self))
     }
 }
 
@@ -151,17 +171,39 @@ pub struct EncryptedAndIv {
     pub iv: Iv
 }
 
-pub fn encrypt<'a>(key: &Key, decrypted: &Decrypted) -> Result<EncryptedAndIv, aead::Error> {
+
+#[derive(Debug, Clone)]
+pub enum EncryptionError {
+    GenericEncryptionError
+}
+impl fmt::Display for EncryptionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            EncryptionError::GenericEncryptionError => write!(f, "{}", "Encryption error"),
+        }
+    }
+}
+
+impl error::Error for EncryptionError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        // Generic error, underlying cause isn't tracked.
+        None
+    }
+}
+
+pub fn encrypt<'a>(key: &Key, decrypted: &Decrypted) -> Result<EncryptedAndIv, EncryptionError> {
     let iv = Iv::generate();
     let nonce = GenericArray::from_slice(&iv.u8_array);
     let client = Aes256Gcm::new(GenericArray::clone_from_slice(&key.u8_array));
-    let ciphertext =  client.encrypt(nonce, decrypted.value.as_bytes())?;
-    Ok(EncryptedAndIv {
-        iv: iv,
-        encrypted: Encrypted {
-            u8_vec: ciphertext
-        }
-    })
+    match client.encrypt(nonce, decrypted.value.as_bytes()) {
+        Ok(ciphertext) => Ok(EncryptedAndIv {
+            iv: iv,
+            encrypted: Encrypted {
+                u8_vec: ciphertext
+            }
+        }),
+        Err(_) => Err(EncryptionError::GenericEncryptionError)
+    }
 }
 
 #[derive(Debug, Clone)]
